@@ -26,6 +26,7 @@ def home():
 def small_cap():
     data = get_db_data(category='small-cap')
     columns = data[0].keys() if data else []
+    
     return render_template('index.html', data=data, columns=columns, title='Small Cap')
 
 @app.route('/mid-cap')
