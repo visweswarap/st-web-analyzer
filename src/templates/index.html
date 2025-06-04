@@ -5,35 +5,176 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title if title else 'Mutual Funds Data' }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        table.table-bordered {
+            border: 0px solid #0d6efd !important; /* Bootstrap blue */
+            table-layout: auto !important;
+            width: 50%;
+        }
+        table.table-bordered th,
+        table.table-bordered td {
+            border: 0px solid #0d6efd !important;
+              
+        }
+        th.fund-name-col, td.fund-name-col {
+        max-width: 500px;   
+        white-space: normal;  
+        word-break: break-word;
+    }
+    .form-select, .form-select option {
+    font-size: 0.80rem !important;
+    padding-top: 1px !important;
+    padding-bottom: 2px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    height: 24px !important;
+    min-height: 0 !important;
+    line-height: 1.2 !important;
+    box-sizing: border-box 
+    
+}
+    </style>
 </head>
 <body>
     <div class="container mt-4">
-        <h2 class="mb-4">{{ title if title else 'Mutual Funds Data' }}</h2>
+        <h2 class="mb-4" style="background-color: aqua;">{{ title if title else 'Mutual Funds Data' }}</h2>
         <a href="/" class="btn btn-link mb-3">&larr; Home</a>
+        <div class="mb-2 d-flex gap-2 align-items-end" style="height: 28px;" >
+            <div style="width: 250px;"><span class="fw-bold" style="font-size: 0.95rem;">Fund Name</span></div>
+            <div style="width: 250px;"><span class="fw-bold" style="font-size: 0.95rem;">Stock Invested</span></div>
+            <div style="width: 250px;"><span class="fw-bold" style="font-size: 0.95rem;">Sector</span></div>
+        </div>
+        <div class="mb-3 d-flex gap-2" style="height: 32px;">
+            <select id="fundDropdown" class="form-select p-1" style="width: 250px; height: auto; font-size: 0.85rem; padding: 2px 4px !important;" size="1" >
+                <option value="all">All Funds</option>
+                {% for fund in fund_names %}
+                    <option value="{{ fund|trim }}">{{ fund|trim }}</option>
+                {% endfor %}
+            </select>
+            <select id="stockDropdown" class="form-select p-1" style="width: 250px; height: auto; font-size: 0.85rem;" size="1">
+                <option value="all">All Stocks</option>
+                {% for stock in stock_names %}
+                    <option value="{{ stock|trim }}">{{ stock|trim }}</option>
+                {% endfor %}
+            </select>
+            <select id="sectorDropdown" class="form-select p-1" style="width: 250px; height: auto; font-size: 0.85rem;" size="1">
+                <option value="all">All Sectors</option>
+                {% for sector in sector_names %}
+                    <option value="{{ sector|trim }}">{{ sector|trim }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary btn-sm" style="height: 28px; font-size: 0.95rem;" onclick="showTable()">Submit</button>
+            <button class="btn btn-secondary btn-sm" style="height: 28px; font-size: 0.95rem;" onclick="resetTable()">Show All</button>
+        </div>
+        <div id="table-section" style="display:none;">
         {% if data %}
         <div class="table-responsive">
-            <table class="table table-bordered table-striped">
+            <table id="data-table" class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         {% for col in columns %}
-                        <th>{{ col }}</th>
+                           {% if col not in ['stock_url', 'Value_Mn', 'created_on', 'modified_on', 'category'] %}
+                        <th style="background-color: rgb(179, 204, 244);">{{ col }}</th>
+                            {% endif %}
                         {% endfor %}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="table-body">
                     {% for row in data %}
+                     {% if row['one_m_change']|float >= 0 %}
                     <tr>
                         {% for col in columns %}
-                        <td>{{ row[col] }}</td>
+                            {% if col not in ['stock_url', 'Value_Mn', 'created_on', 'modified_on', 'category'] %}
+                        {% if col == 'Quantity' %}
+                            <td>{{ "%.2f"|format(row[col]|float) }}</td>
+                        {% else %}
+                            <td>{{ row[col] }}</td>
+                        {% endif %}
+                            {% endif %}
                         {% endfor %}
                     </tr>
+                     {% endif %} 
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% endif %}
+        </div>
+        {% if data %}
+        <nav aria-label="Page navigation" class="pagination-footer navbar fixed-bottom bg-light border-top py-2">
+            <ul class="pagination justify-content-center mb-0">
+                {% if has_prev %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page - 1 }}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo; Previous</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">&laquo; Previous</span>
+                </li>
+                {% endif %}
+                <li class="page-item active">
+                    <span class="page-link">
+                        Page {{ page }}
+                    </span>
+                </li>
+                {% if has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page + 1 }}" aria-label="Next">
+                        <span aria-hidden="true">Next &raquo;</span>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">Next &raquo;</span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
         {% else %}
         <p>No data found.</p>
         {% endif %}
     </div>
+    <script>
+function showTable() {
+    var fundValue = document.getElementById('fundDropdown').value;
+    var sectorValue = document.getElementById('sectorDropdown').value;
+    var stockValue = document.getElementById('stockDropdown').value;
+    var tableSection = document.getElementById('table-section');
+    // Only show the table if at least one filter is not 'all'
+    if (fundValue !== 'all' || sectorValue !== 'all' || stockValue !== 'all') {
+        tableSection.style.display = '';
+        const rows = document.querySelectorAll('#table-body tr');
+        rows.forEach(row => {
+            let show = true;
+            if (fundValue !== 'all') {
+                show = row.innerText.includes(fundValue);
+            }
+            if (show && sectorValue !== 'all') {
+                show = row.innerText.includes(sectorValue);
+            }
+            if (show && stockValue !== 'all') {
+                show = row.innerText.includes(stockValue);
+            }
+            row.style.display = show ? '' : 'none';
+        });
+    } else {
+        // Hide table if all filters are 'all' and user clicks Submit
+        tableSection.style.display = 'none';
+    }
+}
+function resetTable() {
+    document.getElementById('fundDropdown').value = 'all';
+    document.getElementById('sectorDropdown').value = 'all';
+    document.getElementById('stockDropdown').value = 'all';
+    // Show the table and all rows when Show All is clicked
+    var tableSection = document.getElementById('table-section');
+    tableSection.style.display = '';
+    const rows = document.querySelectorAll('#table-body tr');
+    rows.forEach(row => { row.style.display = ''; });
+    // Do not redirect or reload the page
+}
+    </script>
 </body>
 </html>
