@@ -1,3 +1,4 @@
+import json
 from flask import Flask, render_template, redirect, url_for, request
 import sqlite3
 import os
@@ -9,20 +10,30 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'mutualfunds.
 def get_db_data(category=None, limit=None, offset=None):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    query = 'SELECT * FROM stocks_by_fund '
-    params = []
-    if category:
-        query += ' WHERE category=?'
-        params.append(category)
-    query += ' ORDER BY fund_name'
-    if limit is not None and offset is not None:
-        query += ' LIMIT ? OFFSET ?'
-        params.extend([limit, offset])
-    cur.execute(query, params)
-    rows = cur.fetchall()
-    conn.close()
-    return rows
+    try:
+        cur = conn.cursor()
+        query = 'SELECT * FROM stocks_by_fund '
+        params = []
+        if category:
+            query += ' WHERE category=?'
+            params.append(category)
+        query += ' ORDER BY fund_name'
+        if limit is not None and offset is not None:
+            query += ' LIMIT ? OFFSET ?'
+            params.extend([limit, offset])
+        cur.execute(query, params)
+        rows = cur.fetchall()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        rows = []
+    except Exception as e:
+        print(f"General error: {e}")
+        rows = []
+    finally:
+        conn.close()
+    if rows:
+        result = [dict(row) for row in rows]
+    return result
 
 def get_total_count(category=None):
     conn = sqlite3.connect(DB_PATH)
@@ -79,6 +90,41 @@ def get_stock_names_by_category(category=None):
 @app.route('/')
 def home():
     return render_template('home.html')
+
+@app.route('/all-funds')
+def all_funds():
+    # Your data - could come from database, API, CSV, etc.
+    portfolio_data = [
+        {
+            "id": 3841,
+            "fund_name": "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth",
+            "stock_invested_in": "Max Financial Services Ltd.",
+            "sector": "Life insurance",
+            "one_m_change": 0.41,
+            "quantity": 25500000.00,
+            "one_m_change_in_qty": 0.0,
+            "portfolio_date": "2025-04-30"
+        },
+        # ... more data
+    ]
+    result = []
+    for item in get_db_data():
+        result.append({
+            "id": item["id"],
+            "fund_name": item["fund_name"],
+            "stock_invested_in": item["Stock_Invested_in"],
+            "sector": item["Sector"],
+            "one_m_change": item["one_m_change"],
+            "quantity": item["Quantity"],
+            "one_m_change_in_qty": item["one_m_change_in_qty"],
+            "portfolio_date": item["portfolio_date"],
+            "category": item["category"]
+        })
+    portfolio_data = result
+    
+    return render_template('master2.html', title='All Funds', 
+                         portfolio_data=json.dumps(portfolio_data),
+                         total_records=len(portfolio_data))
 
 @app.route('/small-cap')
 def small_cap():
