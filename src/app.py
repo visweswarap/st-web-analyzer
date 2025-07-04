@@ -1,5 +1,5 @@
 import json
-from flask import Flask, render_template, redirect, url_for, request
+from flask import Flask, render_template, redirect, url_for, request, jsonify
 import sqlite3
 import os
 
@@ -155,6 +155,49 @@ def mid_cap():
     sector_names = get_sector_names_by_category('mid-cap')
     stock_names = get_stock_names_by_category('mid-cap')
     return render_template('index.html', data=data, columns=columns, title='Mid Cap', page=page, has_prev=has_prev, has_next=has_next, fund_names=fund_names, sector_names=sector_names, stock_names=stock_names)
+
+@app.route('/midcap-table')
+def midcap_table():
+    data = get_db_data(category='mid-cap')
+    return render_template('midcap.html', data=data, title='Mid Cap Funds')
+
+@app.route('/query-pannel')
+def query_pannel():
+    result = []
+    for item in get_db_data():
+        result.append({
+            "id": item["id"],
+            "fund_name": item["fund_name"],
+            "stock_invested_in": item["Stock_Invested_in"],
+            "sector": item["Sector"],
+            "one_m_change": item["one_m_change"],
+            "quantity": item["Quantity"],
+            "one_m_change_in_qty": item["one_m_change_in_qty"],
+            "portfolio_date": item["portfolio_date"],
+            "category": item["category"]
+        })
+    portfolio_data = result
+    return render_template('querypannel.html', title='Query Panel', portfolio_data=json.dumps(portfolio_data), total_records=len(portfolio_data))
+
+@app.route('/run-sql-query', methods=['POST'])
+def run_sql_query():
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    if not query.lower().startswith('select'):
+        return jsonify({'success': False, 'error': 'Only SELECT queries are allowed.'})
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(query)
+        rows = cur.fetchall()
+        columns = [desc[0] for desc in cur.description]
+        result_rows = [dict(row) for row in rows]
+        return jsonify({'success': True, 'columns': columns, 'rows': result_rows})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)

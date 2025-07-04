@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Panel</title>
+    <style>
+        /* ...existing styles from master2.html... */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .grid-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .grid-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .grid-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .search-box {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            placeholder-color: rgba(255,255,255,0.7);
+            min-width: 400px;
+        }
+        .search-box::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+        .page-size-select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .grid-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .grid-table th {
+            background-color: #b3ccf4;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 2px solid #9bb3e8;
+            position: relative;
+        }
+        .grid-table th:hover {
+            background-color: #a3bcf0;
+        }
+        .grid-table th.sortable::after {
+            content: ' ⇅';
+            opacity: 0.5;
+            margin-left: 5px;
+        }
+        .grid-table th.sort-asc::after {
+            content: ' ↑';
+            opacity: 1;
+            color: #333;
+        }
+        .grid-table th.sort-desc::after {
+            content: ' ↓';
+            opacity: 1;
+            color: #333;
+        }
+        .grid-table tbody tr {
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .grid-table tbody tr:hover {
+            background-color: #f8f9ff;
+        }
+        .grid-table tbody tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .grid-table tbody tr:nth-child(even):hover {
+            background-color: #f0f2ff;
+        }
+        .grid-table td {
+            padding: 10px 8px;
+            vertical-align: middle;
+        }
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+        }
+        .pagination-controls {
+            display: flex;
+            gap: 5px;
+        }
+        .pagination-btn {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .pagination-btn:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+        }
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .pagination-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .pagination-info {
+            font-size: 14px;
+            color: #666;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-style: italic;
+        }
+        .numeric {
+            text-align: right;
+        }
+        .positive {
+            color: #28a745;
+        }
+        .negative {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-container">
+        <div class="grid-header">
+            <h2>Custom User Query</h2>
+            <div class="grid-controls">
+                <textarea class="search-box" id="searchInput" placeholder="Enter SQL query, e.g. SELECT * FROM stocks_by_fund" style="min-width: 400px; min-height: 10px; resize: vertical;"></textarea>
+                <button onclick="runQuery()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/lightning-charge.svg" alt="Run" style="width: 20px; height: 20px; filter: brightness(0) invert(1);">
+                    Run
+                </button>
+                <select class="page-size-select" id="pageSizeSelect" style="margin-left: 10px;">
+                    <option value="10">10 per page</option>
+                    <option value="25" selected>25 per page</option>
+                    <option value="50">50 per page</option>
+                    <option value="100">100 per page</option>
+                </select>
+            </div>
+        </div>
+        <table class="grid-table" id="dataGrid" style="display: none;">
+            <thead>
+                <tr>
+                    <th data-column="id" class="sortable">ID</th>
+                    <th data-column="fund_name" class="sortable">Fund Name</th>
+                    <th data-column="stock_invested_in" class="sortable">Stock Invested In</th>
+                    <th data-column="sector" class="sortable">Sector</th>
+                    <th data-column="one_m_change" class="sortable numeric">1M Change (%)</th>
+                    <th data-column="quantity" class="sortable numeric">Quantity</th>
+                    <th data-column="one_m_change_in_qty" class="sortable numeric">1M Qty Change</th>
+                    <th data-column="portfolio_date" class="sortable">Portfolio Date</th>
+                    <th data-column="category" class="sortable">Category</th>
+                </tr>
+            </thead>
+            <tbody id="gridBody">
+            </tbody>
+        </table>
+        <div class="pagination" id="pagination">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-controls" id="paginationControls"></div>
+        </div>
+    </div>
+    <script>
+        let allRows = [];
+        let currentPage = 1;
+        let pageSize = 25;
+        let sortColumn = null;
+        let sortDirection = 'asc';
+
+        function runQuery() {
+            const query = document.getElementById('searchInput').value;
+            fetch('/run-sql-query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    allRows = data.rows;
+                    currentPage = 1;
+                    sortColumn = null;
+                    sortDirection = 'asc';
+                    renderTable(data.columns, allRows, currentPage, pageSize);
+                    renderPagination(data.columns, allRows, currentPage, pageSize);
+                    setupSortHandlers(data.columns);
+                } else {
+                    renderError(data.error);
+                }
+            });
+        }
+
+        function renderTable(columns, rows, page, pageSize) {
+            const table = document.getElementById('dataGrid');
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            // Render header with sort icons
+            thead.innerHTML = '<tr>' + columns.map(col => {
+                let sortClass = '';
+                if (col === sortColumn) {
+                    sortClass = sortDirection === 'asc' ? 'sort-asc' : 'sort-desc';
+                } else {
+                    sortClass = 'sortable';
+                }
+                return `<th class="sortable ${sortClass}" data-column="${col}">${col}</th>`;
+            }).join('') + '</tr>';
+            // Render body (paginated)
+            const start = (page - 1) * pageSize;
+            const end = start + pageSize;
+            const pageRows = rows.slice(start, end);
+            tbody.innerHTML = pageRows.length ? pageRows.map(row => `<tr>${columns.map(col => {
+                let val = row[col];
+                let cell = '';
+                if ((col === 'one_m_change' || col === 'one_m_change_in_qty')) {
+                    if (!isNaN(parseFloat(val)) && isFinite(val) && String(val).trim() !== '') {
+                        if (parseFloat(val) < 0) {
+                            cell = `<td style='color:#dc3545;'>${val}</td>`;
+                        } else if (parseFloat(val) > 0) {
+                            cell = `<td style='color:#28a745;'>${val}</td>`;
+                        } else {
+                            cell = `<td>${val}</td>`;
+                        }
+                    } else {
+                        cell = `<td>${val === null || val === undefined ? '' : val}</td>`;
+                    }
+                } else {
+                    cell = `<td>${val === null || val === undefined ? '' : val}</td>`;
+                }
+                return cell;
+            }).join('')}</tr>`).join('') : '<tr><td colspan="' + columns.length + '" class="no-data">No data found.</td></tr>';
+            table.style.display = '';
+        }
+
+        function renderPagination(columns, rows, page, pageSize) {
+            const totalPages = Math.ceil(rows.length / pageSize);
+            const paginationInfo = document.getElementById('paginationInfo');
+            const paginationControls = document.getElementById('paginationControls');
+            const startRecord = (page - 1) * pageSize + 1;
+            const endRecord = Math.min(page * pageSize, rows.length);
+            paginationInfo.innerHTML = `Showing ${rows.length === 0 ? 0 : startRecord}-${endRecord} of ${rows.length} records`;
+            if (totalPages <= 1) {
+                paginationControls.innerHTML = '';
+                return;
+            }
+            let paginationHTML = '';
+            paginationHTML += `<button class="pagination-btn" ${page === 1 ? 'disabled' : ''} onclick="goToPage(${page - 1})">Previous</button>`;
+            const startPage = Math.max(1, page - 2);
+            const endPage = Math.min(totalPages, page + 2);
+            if (startPage > 1) {
+                paginationHTML += `<button class="pagination-btn" onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) {
+                    paginationHTML += `<span style="padding: 8px;">...</span>`;
+                }
+            }
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHTML += `<button class="pagination-btn ${i === page ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHTML += `<span style="padding: 8px;">...</span>`;
+                }
+                paginationHTML += `<button class="pagination-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+            paginationHTML += `<button class="pagination-btn" ${page === totalPages ? 'disabled' : ''} onclick="goToPage(${page + 1})">Next</button>`;
+            paginationControls.innerHTML = paginationHTML;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            const columns = Array.from(document.querySelectorAll('#dataGrid thead th')).map(th => th.textContent);
+            renderTable(columns, allRows, currentPage, pageSize);
+            renderPagination(columns, allRows, currentPage, pageSize);
+            setupSortHandlers(columns);
+        }
+
+        document.getElementById('pageSizeSelect').addEventListener('change', function() {
+            pageSize = parseInt(this.value);
+            currentPage = 1;
+            const columns = Array.from(document.querySelectorAll('#dataGrid thead th')).map(th => th.textContent);
+            renderTable(columns, allRows, currentPage, pageSize);
+            renderPagination(columns, allRows, currentPage, pageSize);
+            setupSortHandlers(columns);
+        });
+
+        function setupSortHandlers(columns) {
+            document.querySelectorAll('#dataGrid thead th.sortable').forEach(th => {
+                th.onclick = function() {
+                    const col = th.getAttribute('data-column');
+                    if (sortColumn === col) {
+                        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortColumn = col;
+                        sortDirection = 'asc';
+                    }
+                    allRows.sort((a, b) => {
+                        let aVal = a[col];
+                        let bVal = b[col];
+                        // Try to parse as float for numeric sort
+                        if (!isNaN(parseFloat(aVal)) && !isNaN(parseFloat(bVal))) {
+                            aVal = parseFloat(aVal);
+                            bVal = parseFloat(bVal);
+                        } else if (Date.parse(aVal) && Date.parse(bVal)) {
+                            aVal = new Date(aVal);
+                            bVal = new Date(bVal);
+                        } else {
+                            aVal = String(aVal).toLowerCase();
+                            bVal = String(bVal).toLowerCase();
+                        }
+                        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                    renderTable(columns, allRows, currentPage, pageSize);
+                    renderPagination(columns, allRows, currentPage, pageSize);
+                    setupSortHandlers(columns);
+                };
+            });
+        }
+
+        function renderError(error) {
+            const table = document.getElementById('dataGrid');
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            thead.innerHTML = '';
+            tbody.innerHTML = `<tr><td class='no-data'>${error}</td></tr>`;
+            table.style.display = '';
+            document.getElementById('paginationInfo').innerHTML = '';
+            document.getElementById('paginationControls').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
